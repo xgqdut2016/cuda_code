@@ -75,7 +75,7 @@ int main()
     cudaFree(dC);
 
     ela = get_walltime() - st;
-    printf("n = %d: CPU use time:%.4f, GPU use time:%.4f, kernel time:%.4f\n", n, elaC, ela, ker_time / 1000.0);
+    printf("n = %d: \n CPU use time:%.4f\n GPU use time:%.4f\n kernel time:%.4f\n", n, elaC, ela, ker_time / 1000.0);
     free(hostA);
     free(hostB);
     free(hostC);
