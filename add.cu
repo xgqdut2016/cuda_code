@@ -32,15 +32,18 @@ __global__ void addKernel(float *deviceA, float *deviceB, float *deviceC, int n)
 }
 int main()
 {
-    float *hostA, *hostB, *hostC;
-    int n = 1024;
+    float *hostA, *hostB, *hostC, *serialC;
+    int n = 102400;
 
     hostA = (float *)malloc(n * sizeof(float));
     hostB = (float *)malloc(n * sizeof(float));
     hostC = (float *)malloc(n * sizeof(float));
-    // serialC = (float *)malloc(n * sizeof(float));
+    serialC = (float *)malloc(n * sizeof(float));
     initCpu(hostA, hostB, n);
-
+    double stC, elaC;
+    stC = get_walltime();
+    addCpu(hostA, hostB, serialC, n);
+    elaC = get_walltime() - stC;
     double st, ela;
     st = get_walltime();
 
@@ -72,9 +75,10 @@ int main()
     cudaFree(dC);
 
     ela = get_walltime() - st;
-    printf("n = %d: use time:%.4f, kernel time:%.4f\n", n, ela, ker_time / 1000.0);
+    printf("n = %d: CPU use time:%.4f, GPU sue time:%.4f, kernel time:%.4f\n", n, elaC, ela, ker_time / 1000.0);
     free(hostA);
     free(hostB);
     free(hostC);
+    free(serialC);
     return 0;
 }
