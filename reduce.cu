@@ -59,16 +59,6 @@ __global__ void addKernel(float *dA, int n, float *globalMax, int strategy)
     }
     else if (strategy == 2)
     {
-        typedef cub::BlockReduce<float, BLOCK_DIM> BlockReduce; //<float,..>里面的float表示返回值的类型
-        __shared__ typename BlockReduce::TempStorage temp_storage;
-        float block_sum = BlockReduce(temp_storage).Reduce(tmpSum[threadIdx.x], cub::Sum());
-        if (threadIdx.x == 0)
-        {
-            globalMax[0] = block_sum;
-        }
-    }
-    else
-    {
         __shared__ float val[32];
         float data = tmpSum[threadIdx.x];
         data += __shfl_down_sync(0xffffffff, data, 16); // 0 + 16, 1 + 17,..., 15 + 31
@@ -97,12 +87,23 @@ __global__ void addKernel(float *dA, int n, float *globalMax, int strategy)
             globalMax[0] = data;
         }
     }
+    else
+    {
+        typedef cub::BlockReduce<float, BLOCK_DIM> BlockReduce; //<float,..>里面的float表示返回值的类型
+        __shared__ typename BlockReduce::TempStorage temp_storage;
+        float block_sum = BlockReduce(temp_storage).Reduce(tmpSum[threadIdx.x], cub::Sum());
+        if (threadIdx.x == 0)
+        {
+            globalMax[0] = block_sum;
+        }
+    }
 }
 int main()
 {
     float *hostA;
     int n = 102400;
-    int strategy = 2;
+    int strategy = 3;
+    int repeat = 100;
     hostA = (float *)malloc(n * sizeof(float));
     for (int i = 0; i < n; i++)
     {
@@ -127,7 +128,11 @@ int main()
     int num_block_y = 1;
     dim3 grid_dim(num_block_x, num_block_y, 1);
     dim3 block_dim(BLOCK_DIM, 1, 1);
-    addKernel<1024><<<grid_dim, block_dim>>>(dA, n, globalMax, strategy);
+    for (int i = 0; i < repeat; i++)
+    {
+        addKernel<1024><<<grid_dim, block_dim>>>(dA, n, globalMax, strategy);
+    }
+
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
 
@@ -135,8 +140,8 @@ int main()
     cudaMemcpy(&hostMax, globalMax, sizeof(float), cudaMemcpyDeviceToHost);
     cudaFree(dA);
     cudaFree(globalMax);
-    ela = get_walltime() - st;
-    printf("n = %d: GPU use time:%.4f, kernel time:%.4f\n", n, ela, ker_time / 1000.0);
+    ela = 1000 * (get_walltime() - st);
+    printf("n = %d: strategy:%d, GPU use time:%.4f ms, kernel time:%.4f ms\n", n, strategy, ela, ker_time / repeat);
     printf("CPU sum:%.2f, GPU sum:%.2f\n", addCpu(hostA, n), hostMax);
     free(hostA);
 
