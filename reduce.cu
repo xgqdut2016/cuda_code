@@ -57,6 +57,16 @@ __global__ void addKernel(float *dA, int n, float *globalMax, int strategy)
             globalMax[0] = tmpSum[0];
         }
     }
+    else if (strategy == 2)
+    {
+        typedef cub::BlockReduce<float, BLOCK_DIM> BlockReduce; //<float,..>里面的float表示返回值的类型
+        __shared__ typename BlockReduce::TempStorage temp_storage;
+        float block_sum = BlockReduce(temp_storage).Reduce(tmpSum[threadIdx.x], cub::Sum());
+        if (threadIdx.x == 0)
+        {
+            globalMax[0] = block_sum;
+        }
+    }
     else
     {
         __shared__ float val[32];
