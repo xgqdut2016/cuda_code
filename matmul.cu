@@ -127,7 +127,7 @@ void hostMatrix(float *hostA, float *hostB, float *hostC, int M, int K, int N)
     ela = get_walltime() - st;
     printf("M-K-N: %d-%d-%d\n", M, K, N);
     printf("GPU use time: %.4f second\n", ela);
-    printf("kernel time: %.4f second\n", ker_time / 1000.);
+    printf("kernel time: %.4f second, %.4f ms\n", ker_time / 1000., ker_time);
     printf("grid dim: %d, %d, %d\n", grid_dim.x, grid_dim.y, grid_dim.z);
     printf("block dim: %d, %d, %d\n", block_dim.x, block_dim.y, block_dim.z);
 }
