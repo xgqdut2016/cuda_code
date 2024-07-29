@@ -476,6 +476,7 @@ int main()
     matrixSerial(hostA, hostB, serialC, M, K, N);
     ela = get_walltime() - st;
     printf("CPU time:%.2f second\n", ela);
+
     compare(hostC, serialC, M, N);
     free(hostA);
     free(hostB);
