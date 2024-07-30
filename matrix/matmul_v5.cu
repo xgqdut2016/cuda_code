@@ -333,6 +333,7 @@ __global__ void matrixKernel4th(float *dA, float *dB, float *dC, int M, int K, i
                 }
             }
         }
+
         __syncthreads();
     }
     //--------------
@@ -415,10 +416,10 @@ void hostMatrix(float *hostA, float *hostB, float *hostC, int M, int K, int N)
     dim3 block_dim(BLOCK_DIM_x, BLOCK_DIM_y, 1);
     dim3 grid_dim(num_blocks_x, num_blocks_y, 1);
     int repeat = 20;
-    // matrixKernel1st<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);//warm up
+    // matrixKernel1st<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N); // warm up
     // matrixKernel2nd<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
-    matrixKernel3rd<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
-    // matrixKernel4th<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
+    // matrixKernel3rd<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
+    matrixKernel4th<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
     cudaEvent_t start, stop;
     float ker_time = 0;
     cudaEventCreate(&start);
@@ -428,8 +429,8 @@ void hostMatrix(float *hostA, float *hostB, float *hostC, int M, int K, int N)
     {
         // matrixKernel1st<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
         // matrixKernel2nd<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
-        matrixKernel3rd<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
-        // matrixKernel4th<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
+        // matrixKernel3rd<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
+        matrixKernel4th<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
         //    matrixOrigin<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
     }
 

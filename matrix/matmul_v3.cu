@@ -231,14 +231,21 @@ void hostMatrix(float *hostA, float *hostB, float *hostC, int M, int K, int N)
     int num_blocks_y = (N + BN - 1) / BN;
     dim3 block_dim(BLOCK_DIM_x, BLOCK_DIM_y, 1);
     dim3 grid_dim(num_blocks_x, num_blocks_y, 1);
+    int repeat = 20;
+    // matrixKernel1st<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
+    matrixKernel2nd<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
+    // matrixOrigin<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
     cudaEvent_t start, stop;
     float ker_time = 0;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
-    matrixKernel1st<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
-    // matrixKernel2nd<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
-    // matrixOrigin<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
+    for (int i = 0; i < repeat; i++)
+    {
+        // matrixKernel1st<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
+        matrixKernel2nd<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
+        // matrixOrigin<BM, BN, BK, TM, TN><<<grid_dim, block_dim>>>(dA, dB, dC, M, K, N);
+    }
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)
@@ -261,7 +268,7 @@ void hostMatrix(float *hostA, float *hostB, float *hostC, int M, int K, int N)
     ela = get_walltime() - st;
     printf("M-K-N: %d-%d-%d\n", M, K, N);
     printf("GPU use time: %.4f second\n", ela);
-    printf("kernel time: %.4f second, %.4f ms\n", ker_time / 1000., ker_time);
+    printf("kernel time: %.4f second, %.4f ms\n", ker_time / (repeat * 1000.), ker_time / repeat);
     printf("grid dim: %d, %d, %d\n", grid_dim.x, grid_dim.y, grid_dim.z);
     printf("block dim: %d, %d, %d\n", block_dim.x, block_dim.y, block_dim.z);
 }

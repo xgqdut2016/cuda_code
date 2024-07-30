@@ -61,13 +61,7 @@ void cublasMatrix(float *hostA, float *hostB, float *hostC, int M, int K, int N)
     cublasCreate(&handle); // 初始化句柄
     float alpha = 1.0;
     float beta = 0.0;
-
-    cudaEvent_t start, stop;
-    float ker_time = 0;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start, 0);
-
+    int repeat = 20;
     // cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, dB, N, dA, K, &beta, dC, N);
     // cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, M, N, K, &alpha, dA, K, dB, N, &beta, dC, M);
     cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N,
@@ -78,6 +72,24 @@ void cublasMatrix(float *hostA, float *hostB, float *hostC, int M, int K, int N)
                  &beta,
                  dC, CUDA_R_32F, N,
                  CUDA_R_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+    cudaEvent_t start, stop;
+    float ker_time = 0;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
+    for (int i = 0; i < repeat; i++)
+    {
+        // cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, dB, N, dA, K, &beta, dC, N);
+        // cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, M, N, K, &alpha, dA, K, dB, N, &beta, dC, M);
+        cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+                     N, M, K,
+                     &alpha,
+                     dB, CUDA_R_32F, N,
+                     dA, CUDA_R_32F, K,
+                     &beta,
+                     dC, CUDA_R_32F, N,
+                     CUDA_R_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+    }
 
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
@@ -92,7 +104,7 @@ void cublasMatrix(float *hostA, float *hostB, float *hostC, int M, int K, int N)
     ela = get_walltime() - st;
     printf("M-K-N: %d-%d-%d\n", M, K, N);
     printf("cublas time: %.4f second\n", ela);
-    printf("kernel time: %.4f second\n", ker_time / 1000.);
+    printf("kernel time: %.4f second, %.4f ms\n", ker_time / (repeat * 1000.), ker_time / repeat);
 }
 
 int main()
