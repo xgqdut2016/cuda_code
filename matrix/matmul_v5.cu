@@ -366,6 +366,93 @@ __global__ void matrixKernel4th(float *dA, float *dB, float *dC, int M, int K, i
     }
 }
 template <int BM, int BN, int BK, int TM, int TN>
+__global__ void matrixKernel5th(float *dA, float *dB, float *dC, int M, int K, int N)
+{
+    __shared__ float SA[BM * BK * 2];
+    __shared__ float SB[BK * BN * 2];
+    int indA = TM * (blockIdx.x * blockDim.x);
+    int indB = TN * (blockIdx.y * blockDim.y);
+    int width = (K + BK - 1) / BK;
+    float tmp[TM * TN] = {0.0f};
+    int tid = threadIdx.x + threadIdx.y * blockDim.x;
+    int smem_a_m = tid / 2;
+    int smem_a_k = tid % 2;
+    int smem_b_k = tid / 32;
+    int smem_b_n = tid % 32;
+    float a[4];
+    float b[4];
+    float com_a[TM];
+    float com_b[TN];
+    //------------
+    int ph = 0;
+    (float4 &)a[0] = (float4 &)dA[(indA + smem_a_m) * K + 4 * smem_a_k + ph * BK];
+    SA[(4 * smem_a_k) * BM + smem_a_m + ph % 2 * BM * BK] = a[0];
+    SA[(4 * smem_a_k + 1) * BM + smem_a_m + ph % 2 * BM * BK] = a[1];
+    SA[(4 * smem_a_k + 2) * BM + smem_a_m + ph % 2 * BM * BK] = a[2];
+    SA[(4 * smem_a_k + 3) * BM + smem_a_m + ph % 2 * BM * BK] = a[3];
+    (float4 &)b[0] = (float4 &)dB[(smem_b_k + ph * BK) * N + indB + 4 * smem_b_n];
+    (float4 &)SB[smem_b_k * BN + 4 * smem_b_n] = (float4 &)b[0];
+
+    __syncthreads();
+
+    for (int ph = 1; ph < width; ph++)
+    {
+        (float4 &)a[0] = (float4 &)dA[(indA + smem_a_m) * K + 4 * smem_a_k + ph * BK];
+        (float4 &)b[0] = (float4 &)dB[(smem_b_k + ph * BK) * N + indB + 4 * smem_b_n];
+
+        //-------------
+        for (int index_k = 0; index_k < BK; index_k++)
+        {
+            (float4 &)com_a[0] = (float4 &)SA[index_k * BM + threadIdx.x * TM + (ph - 1) % 2 * BM * BK];
+            (float4 &)com_a[4] = (float4 &)SA[index_k * BM + threadIdx.x * TM + 4 + (ph - 1) % 2 * BM * BK];
+            (float4 &)com_b[0] = (float4 &)SB[index_k * BN + threadIdx.y * TN + (ph - 1) % 2 * BN * BK];
+            (float4 &)com_b[4] = (float4 &)SB[index_k * BN + threadIdx.y * TN + 4 + (ph - 1) % 2 * BN * BK];
+            for (int index_q = 0; index_q < TM; index_q++)
+            {
+                for (int index_v = 0; index_v < TN; index_v++)
+                {
+                    tmp[index_q * TN + index_v] += com_a[index_q] * com_b[index_v];
+                }
+            }
+        }
+        SA[(4 * smem_a_k) * BM + smem_a_m + ph % 2 * BM * BK] = a[0];
+        SA[(4 * smem_a_k + 1) * BM + smem_a_m + ph % 2 * BM * BK] = a[1];
+        SA[(4 * smem_a_k + 2) * BM + smem_a_m + ph % 2 * BM * BK] = a[2];
+        SA[(4 * smem_a_k + 3) * BM + smem_a_m + ph % 2 * BM * BK] = a[3];
+
+        (float4 &)SB[smem_b_k * BN + 4 * smem_b_n + ph % 2 * BN * BK] = (float4 &)b[0];
+        __syncthreads();
+    }
+    //--------------
+    ph = width;
+    for (int index_k = 0; index_k < BK; index_k++)
+    {
+        (float4 &)com_a[0] = (float4 &)SA[index_k * BM + threadIdx.x * TM + (ph - 1) % 2 * BM * BK];
+        (float4 &)com_a[4] = (float4 &)SA[index_k * BM + threadIdx.x * TM + 4 + (ph - 1) % 2 * BM * BK];
+        (float4 &)com_b[0] = (float4 &)SB[index_k * BN + threadIdx.y * TN + (ph - 1) % 2 * BN * BK];
+        (float4 &)com_b[4] = (float4 &)SB[index_k * BN + threadIdx.y * TN + 4 + (ph - 1) % 2 * BN * BK];
+        for (int index_q = 0; index_q < TM; index_q++)
+        {
+            for (int index_v = 0; index_v < TN; index_v++)
+            {
+                tmp[index_q * TN + index_v] += com_a[index_q] * com_b[index_v];
+            }
+        }
+    }
+    for (int index_q = 0; index_q < TM; index_q++)
+    {
+        for (int index_v = 0; index_v < TN; index_v++)
+        {
+            int reg_c_m = threadIdx.x * TM + index_q;
+            int reg_c_n = threadIdx.y * TN + index_v;
+            if (indA + index_q < M && indB + index_v < N)
+            {
+                dC[(indA + reg_c_m) * N + indB + reg_c_n] = tmp[index_q * TN + index_v];
+            }
+        }
+    }
+}
+template <int BM, int BN, int BK, int TM, int TN>
 __global__ void matrixOrigin(float *dA, float *dB, float *dC, int M, int K, int N)
 {
 
