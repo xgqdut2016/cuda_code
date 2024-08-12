@@ -27,6 +27,7 @@ __global__ void addKernel(float *dA, int n, float *globalMax, int strategy)
         tmp += dA[id];
     }
     tmpSum[threadIdx.x] = tmp;
+    __syncthreads();
     if (strategy == 0)
     {
         for (int step = 1; step < BLOCK_DIM; step *= 2)

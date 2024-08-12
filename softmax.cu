@@ -22,6 +22,7 @@ __global__ void softmax(float *input, float *output, int M, int N)
         val = max(val, input[row * N + i]);
     }
     tmp[threadIdx.x] = val;
+    __syncthreads();
     for (int step = BLOCK_DIM / 2; step > 0; step /= 2)
     {
         if (threadIdx.x < step)
