@@ -56,6 +56,54 @@ __global__ void row_wmma_ker(float *dA, float *dB, float *dC, int M, int K, int 
         wmma::store_matrix_sync(dC + cRow * ldc + cCol, c_frag, ldc, wmma::mem_row_major);
     }
 }
+__device__ void wmmaBlock(float *dA, float *dB, float *dC, int indA, int indB, int M, int K, int N)
+{
+    int lda = K; // A=[M,K],索引(x,y) = x * K + y，列优先原则索引(x,y) = y * M + x
+    int ldb = N;
+    int ldc = N;
+
+    int tid = threadIdx.x + threadIdx.y * blockDim.x;
+    int warpId = tid / warpSize;
+    int warpIdx = warpId % warpX;
+    int warpIdy = warpId / warpX;
+
+    // Declare the fragments
+    wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, wmma::precision::tf32, wmma::row_major> left_frag;
+    wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_N, WMMA_K, wmma::precision::tf32, wmma::row_major> right_frag;
+    wmma::fragment<wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, float> c_frag;
+
+    // Initialize the output to zero
+    wmma::fill_fragment(c_frag, 0.0f);
+    int aRow = indA + warpIdx * WMMA_M;
+    int bCol = indB + warpIdy * WMMA_N;
+    int width = (K + WMMA_K - 1) / WMMA_K;
+    for (int i = 0; i < width; i++)
+    {
+        int aCol = i * WMMA_K;
+        int bRow = i * WMMA_K;
+        if (aRow < M && aCol < K && bRow < K && bCol < N)
+        {
+            // 读取A,B矩阵里面子矩阵的元素
+            wmma::load_matrix_sync(left_frag, dA + aRow * lda + aCol, lda);
+            wmma::load_matrix_sync(right_frag, dB + bRow * ldb + bCol, ldb);
+            // 子矩阵做乘法
+            wmma::mma_sync(c_frag, left_frag, right_frag, c_frag);
+        }
+    }
+    int cRow = aRow;
+    int cCol = bCol;
+    if (cRow < M && cCol < N)
+    {
+        // Store the output
+        wmma::store_matrix_sync(dC + cRow * ldc + cCol, c_frag, ldc, wmma::mem_row_major);
+    }
+}
+__global__ void wmmaRowMatmul(float *dA, float *dB, float *dC, int M, int K, int N)
+{
+    int indA = blockIdx.x * warpX * WMMA_M;
+    int indB = blockIdx.y * warpY * WMMA_N;
+    wmmaBlock(dA, dB, dC, indA, indB, M, K, N);
+}
 __global__ void tranKernel(float *dB, int N, int d)
 {
     int index = threadIdx.x + blockIdx.x * blockDim.x;
@@ -124,14 +172,16 @@ void hostMatrix(float *hostA, float *hostB, float *hostC, int N, int d)
     cudaEvent_t start, stop;
     float ker_time = 0;
     tranKernel<<<num_block, BLOCK_DIM>>>(dB, N, d); // 只能转置一次
-    row_wmma_ker<<<grid_dim, block_dim>>>(dA, dB, dC, N, d, N);
+    // row_wmma_ker<<<grid_dim, block_dim>>>(dA, dB, dC, N, d, N);
+    wmmaRowMatmul<<<grid_dim, block_dim>>>(dA, dB, dC, N, d, N);
     int repeat = 20;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
     for (int i = 0; i < repeat; i++)
     {
-        row_wmma_ker<<<grid_dim, block_dim>>>(dA, dB, dC, N, d, N);
+        // row_wmma_ker<<<grid_dim, block_dim>>>(dA, dB, dC, N, d, N);
+        wmmaRowMatmul<<<grid_dim, block_dim>>>(dA, dB, dC, N, d, N);
     }
 
     cudaEventRecord(stop, 0);
@@ -183,4 +233,3 @@ int main()
     free(serialC);
     return 0;
 }
-
